@@ -1,0 +1,3 @@
+# NES console emulator
+
+## WIP..
