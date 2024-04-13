@@ -5,7 +5,7 @@ version = "0.1.0"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-    { name = "Artem Kustov", email = "kust.artcom@gmail.com" }
+    { name = "artcom", email = "kust.artcom@gmail.com" }
 ]
 maintainers = []
 keywords = []
