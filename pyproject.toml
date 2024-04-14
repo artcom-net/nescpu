@@ -14,18 +14,35 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-dev = []
-test = []
+dev = [
+    "flake8==7.0.0",
+    "Flake8-pyproject==1.2.3",
+    "isort==5.13.2",
+    "pytest==8.1.1"
+]
 
 [project.urls]
-"Homepage" = ""
-"Bug Reports" = ""
-"Funding" = ""
-"Say Thanks!" = ""
-"Source" = ""
+"Homepage" = "https://github.com/artcom-net/mayones"
+"Bug Reports" = "https://github.com/artcom-net/mayones/issues"
+"Source" = "https://github.com/artcom-net/mayones"
 
-[project.scripts]
+# [project.scripts]
 
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = ["setuptools>=61.0", "wheel>=0.37.1"]
+
+[tool.flake8]
+max-line-length = 79
+
+[tool.isort]
+line_length = 79
+known_first_party = ["mayones"]
+known_third_party = ["pytest"]
+include_trailing_comma = true
+indent = 4
+multi_line_output = 3
+skip_glob = []
+skip_gitignore = true
+
+[tool.pytest.ini_options]
