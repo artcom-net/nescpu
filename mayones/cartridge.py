@@ -57,7 +57,7 @@ class Cartridge:
 
         self._parse_rom(rom)
 
-    def read(self, address: int):
+    def read(self, address: int) -> int:
         return self._mapper.read(address)
 
     def write(self, address: int, data: int):

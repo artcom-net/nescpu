@@ -1,17 +1,17 @@
 from mayones.cartridge import Cartridge
-from mayones.memory import RAM
+
+_2KB = 2048
 
 
 class CPUMemoryBus:
 
-    def __init__(self, ram: RAM, cartridge: Cartridge):
-        self._ram = ram
+    def __init__(self, cartridge: Cartridge):
+        self._ram = bytearray(_2KB)
         self._cartridge = cartridge
 
     def read(self, address: int) -> int:
         if 0x0000 <= address <= 0x1FFF:
-            # RAM
-            return self._ram.read(address & 0x07FF)
+            return self._ram[address & 0x07FF]
         if 0x2000 <= address <= 0x3FFF:
             # PPU registers
             return 0
@@ -27,11 +27,14 @@ class CPUMemoryBus:
         raise ValueError(f'address out of range: {address:04X}')
 
     def write(self, address: int, data: int) -> None:
-        if 0x0000 <= address <= 0x1FFF:  # RAM
-            return self._ram.write(address & 0x07FF, data)
-        if 0x2000 <= address <= 0x3FFF:  # PPU registers
+        if 0x0000 <= address <= 0x1FFF:
+            self._ram[address & 0x07FF] = data
             return None
-        if address == 0x4014:  # DMA
+        if 0x2000 <= address <= 0x3FFF:
+            # PPU registers
+            return None
+        if address == 0x4014:
+            # DMA
             return None
         if 0x4000 <= address <= 0x4017:
             # APU and I/O registers
@@ -43,3 +46,24 @@ class CPUMemoryBus:
             # PRG ROM, PRG RAM and mapper registers
             return self._cartridge.write(address, data)
         raise ValueError(f'address out of range: {address:04X}')
+
+
+class PPUMemoryBus:
+
+    def __init__(self, cartridge: Cartridge):
+        self._vram = bytearray(_2KB)
+        self._cartridge = cartridge
+        self._mirroring_type = self._cartridge._mirroring
+
+    def read(self, address: int) -> int:
+        if 0x0000 <= address <= 0x1FFF:
+            return self._cartridge.read(address)
+        if 0x2000 <= address <= 0x2FFF:
+            # if self._mirroring_type is Mirroring.HORIZONTAL:
+            #     address &= 0x23FF
+            return self._vram[address & 0x07FF]
+        raise ValueError(f'address out of range: {address:04X}')
+
+    def write(self, address: int, data: int) -> None:
+        self._vram[address & 0x07FF] = data
+        return None

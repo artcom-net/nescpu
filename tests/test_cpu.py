@@ -5,7 +5,6 @@ import pytest
 from mayones.bus import CPUMemoryBus
 from mayones.cartridge import Cartridge
 from mayones.cpu import CPU, IllegalOpcodeError, TraceEntry
-from mayones.memory import RAM
 
 _BASE_DIR = pathlib.Path(__file__).parent
 _ROM_DIR = _BASE_DIR / 'rom'
@@ -71,7 +70,7 @@ def nestest_trace(request):
 @pytest.fixture(params=[_ROM_DIR / 'nestest.nes'])
 def cpu_nestest_trace(request):
     with open(request.param, 'rb') as rom:
-        bus = CPUMemoryBus(RAM(), Cartridge(rom.read()))
+        bus = CPUMemoryBus(Cartridge(rom.read()))
         cpu = CPU(bus)
         cpu.reset(pc=0xC000)
         trace = []
