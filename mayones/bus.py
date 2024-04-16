@@ -46,24 +46,3 @@ class CPUMemoryBus:
             # PRG ROM, PRG RAM and mapper registers
             return self._cartridge.write(address, data)
         raise ValueError(f'address out of range: {address:04X}')
-
-
-class PPUMemoryBus:
-
-    def __init__(self, cartridge: Cartridge):
-        self._vram = bytearray(_2KB)
-        self._cartridge = cartridge
-        self._mirroring_type = self._cartridge._mirroring
-
-    def read(self, address: int) -> int:
-        if 0x0000 <= address <= 0x1FFF:
-            return self._cartridge.read(address)
-        if 0x2000 <= address <= 0x2FFF:
-            # if self._mirroring_type is Mirroring.HORIZONTAL:
-            #     address &= 0x23FF
-            return self._vram[address & 0x07FF]
-        raise ValueError(f'address out of range: {address:04X}')
-
-    def write(self, address: int, data: int) -> None:
-        self._vram[address & 0x07FF] = data
-        return None

@@ -97,7 +97,6 @@ class AddressMode(enum.Enum):
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class InstructionContext:
-    raw_operand: int | None
     operand: int | None
     address: int | None
 
@@ -154,11 +153,15 @@ class CPU:
     _RESET_VECTOR_ADDR = 0xFFFC
     _IRQ_VECTOR_ADDR = 0xFFFE
 
-    __slots__ = ('_a', '_x', '_y', '_sp', '_flags', '_pc', '_bus',
-                 '_curr_cycles', '_total_cycles', '_instruction', '_context',
+    _ACCUMULATOR_ADDR = -1
+
+    __slots__ = ('_a', '_x', '_y', '_sp', '_flags', '_pc', '_bus', '_opcode',
+                 '_context', '_curr_cycles', '_total_cycles', '_instruction',
                  '_page_crossed', '_instructions_set')
 
     def __init__(self, bus: CPUMemoryBus):
+        self._bus = bus
+
         self._a = 0x00
         self._x = 0x00
         self._y = 0x00
@@ -166,11 +169,11 @@ class CPU:
         self._flags = 0x00
         self._pc = 0x0000
 
-        self._bus = bus
+        self._opcode = 0
+        self._context: InstructionContext | None = None
         self._curr_cycles = 0
         self._total_cycles = 0
         self._instruction: Instruction | None = None
-        self._context: InstructionContext | None = None
         self._page_crossed = False
         self._instructions_set = self._init_instructions()
 
@@ -192,11 +195,11 @@ class CPU:
 
     def tick(self) -> int:
         self._curr_cycles = 0
-        opcode = self._bus.read(self._pc)
+        self._opcode = self._bus.read(self._pc)
         self._pc += 1
-        self._instruction = self._instructions_set.get(opcode)
+        self._instruction = self._instructions_set.get(self._opcode)
         if not self._instruction:
-            raise IllegalOpcodeError(opcode)
+            raise IllegalOpcodeError(self._opcode)
         self._context = self._instruction.get_context()
         self._instruction.execute()
         if self._instruction.check_page_cross and self._page_crossed:
@@ -215,12 +218,11 @@ class CPU:
         flags = self._flags
         total_cycles = self._total_cycles
         self.tick()
-        opcode = self._bus.read(pc)
         return TraceEntry(
             pc=pc,
-            opcode=opcode,
+            opcode=self._opcode,
             mnemonic=self._instruction.mnemonic,
-            operand=self._context.raw_operand,
+            operand=self._context.operand,
             a=a,
             x=x,
             y=y,
@@ -241,86 +243,79 @@ class CPU:
         return pointer
 
     def _get_accumulator_context(self) -> InstructionContext:
-        return InstructionContext(None, self._a, None)
+        return InstructionContext(None, self._ACCUMULATOR_ADDR)
 
     def _get_implied_context(self) -> InstructionContext:
-        return InstructionContext(None, None, None)
+        return InstructionContext(None, None)
 
     def _get_immediate_context(self) -> InstructionContext:
         self._pc += 1
-        operand = self._bus.read(self._pc - 1)
-        return InstructionContext(operand, operand, 0)
+        return InstructionContext(self._bus.read(self._pc - 1), None)
 
-    def __resolve_zeropage_context(self, index: int) -> InstructionContext:
-        operand = self._bus.read(self._pc)
+    def __get_zeropage_context(self, index: int) -> InstructionContext:
+        base_addr = self._bus.read(self._pc)
         self._pc += 1
-        address = (operand + index) & 0xFF
-        resolved_operand = self._bus.read(address)
-        return InstructionContext(operand, resolved_operand, address)
+        return InstructionContext(base_addr, (base_addr + index) & 0xFF)
 
     def _get_zeropage_context(self) -> InstructionContext:
-        return self.__resolve_zeropage_context(0)
+        return self.__get_zeropage_context(0)
 
     def _get_zeropage_x_context(self) -> InstructionContext:
-        return self.__resolve_zeropage_context(self._x)
+        return self.__get_zeropage_context(self._x)
 
     def _resolve_zeropage_y_context(self) -> InstructionContext:
-        return self.__resolve_zeropage_context(self._y)
+        return self.__get_zeropage_context(self._y)
 
-    def __resolve_absolute_context(self, index: int) -> InstructionContext:
-        operand = self._bus.read(self._pc) | self._bus.read(self._pc + 1) << 8
+    def __get_absolute_context(self, index: int) -> InstructionContext:
+        base_addr = self._bus.read(self._pc) | \
+                    self._bus.read(self._pc + 1) << 8
         self._pc += 2
-        effective_address = (operand + index) & 0xFFFF
-        self._page_crossed = self._is_page_crossed(operand, effective_address)
-        return InstructionContext(operand, self._bus.read(effective_address),
-                                  effective_address)
+        effective_address = (base_addr + index) & 0xFFFF
+        self._page_crossed = self._is_page_crossed(base_addr,
+                                                   effective_address)
+        return InstructionContext(base_addr, effective_address)
 
     def _get_absolute_context(self) -> InstructionContext:
-        return self.__resolve_absolute_context(0)
+        return self.__get_absolute_context(0)
 
     def _get_absolute_x_context(self) -> InstructionContext:
-        return self.__resolve_absolute_context(self._x)
+        return self.__get_absolute_context(self._x)
 
     def _get_absolute_y_context(self) -> InstructionContext:
-        return self.__resolve_absolute_context(self._y)
+        return self.__get_absolute_context(self._y)
 
     def _get_indirect_context(self) -> InstructionContext:
-        operand = self._bus.read(self._pc) | self._bus.read(self._pc + 1) << 8
+        pointer = self._bus.read(self._pc) | self._bus.read(self._pc + 1) << 8
         self._pc += 2
-        effective_address = self._read_address_around_page(operand)
-        return InstructionContext(operand,
-                                  self._bus.read(effective_address),
-                                  effective_address)
+        return InstructionContext(pointer,
+                                  self._read_address_around_page(pointer))
 
     def _get_indirect_x_context(self) -> InstructionContext:
-        operand = self._bus.read(self._pc)
+        base_addr = self._bus.read(self._pc)
         self._pc += 1
-        zeropage_addr = (operand + self._x) & 0xFF
-        effective_address = self._read_address_around_page(zeropage_addr)
-        return InstructionContext(operand,
-                                  self._bus.read(effective_address),
-                                  effective_address)
+        zeropage_addr = (base_addr + self._x) & 0xFF
+        return InstructionContext(
+            base_addr, self._read_address_around_page(zeropage_addr))
 
     def _get_indirect_y_context(self) -> InstructionContext:
-        operand = self._bus.read(self._pc)
+        pointer = self._bus.read(self._pc)
         self._pc += 1
-        base_addr = self._read_address_around_page(operand)
+        base_addr = self._read_address_around_page(pointer)
         effective_address = (base_addr + self._y) & 0xFFFF
         self._page_crossed = self._is_page_crossed(base_addr,
                                                    effective_address)
-        return InstructionContext(operand,
-                                  self._bus.read(effective_address),
-                                  effective_address)
+        return InstructionContext(pointer, effective_address)
 
     def _get_relative_context(self) -> InstructionContext:
-        operand = self._bus.read(self._pc)
+        offset = self._bus.read(self._pc)
         self._pc += 1
-        return InstructionContext(operand, operand, 0)
+        return InstructionContext(offset, None)
 
     def _calc_signed_address_offset(self, offset: int) -> int:
         return offset - 0x0100 if offset & 0x80 else offset
 
     def _resolve_stack_address(self) -> int:
+        # TODO: store effective address
         return self._STACK_BASE_ADDR | self._sp
 
     def _push_stack(self, data: int) -> None:
@@ -344,6 +339,13 @@ class CPU:
         self._set_flag(Flag.ZERO, int(data == 0))
         self._set_flag(Flag.NEGATIVE, int(data >> 7 & 1))
 
+    def _get_operand(self):
+        if self._context.address is None:
+            return self._context.operand
+        if self._context.address == self._ACCUMULATOR_ADDR:
+            return self._a
+        return self._bus.read(self._context.address)
+
     def _store(self, address: int, data: int) -> None:
         if self._instruction.address_mode is AddressMode.ACCUMULATOR:
             self._a = data
@@ -356,32 +358,32 @@ class CPU:
         self._push_stack(return_addr & 0xFF)
         self._push_stack(self._flags | Flag.BREAK)
         self._flags |= Flag.INTERRUPT
-        self._pc = (
-            self._bus.read(self._IRQ_VECTOR_ADDR) |
-            self._bus.read(self._IRQ_VECTOR_ADDR + 1) << 8
-        )
+        self._pc = (self._bus.read(self._IRQ_VECTOR_ADDR) |
+                    self._bus.read(self._IRQ_VECTOR_ADDR + 1) << 8)
 
     def _ora(self) -> None:
-        self._a |= self._context.operand
+        self._a |= self._get_operand()
         self._set_nz_flags(self._a)
 
     def _and(self) -> None:
-        self._a &= self._context.operand
+        self._a &= self._get_operand()
         self._set_nz_flags(self._a)
 
     def _eor(self) -> None:
-        self._a ^= self._context.operand
+        self._a ^= self._get_operand()
         self._set_nz_flags(self._a)
 
     def _asl(self) -> None:
-        result = self._context.operand << 1 & 0xFF
-        self._set_flag(Flag.CARRY, self._context.operand >> 7)
+        operand = self._get_operand()
+        result = operand << 1 & 0xFF
+        self._set_flag(Flag.CARRY, operand >> 7)
         self._set_nz_flags(result)
         self._store(self._context.address, result)
 
     def _lsr(self) -> None:
-        result = self._context.operand >> 1
-        self._set_flag(Flag.CARRY, self._context.operand & 1)
+        operand = self._get_operand()
+        result = operand >> 1
+        self._set_flag(Flag.CARRY, operand & 1)
         self._set_nz_flags(result)
         self._store(self._context.address, result)
 
@@ -420,21 +422,22 @@ class CPU:
         self._flags |= Flag.DECIMAL
 
     def _bit(self) -> None:
-        self._set_flag(Flag.ZERO, int(self._a & self._context.operand == 0))
-        self._set_flag(Flag.OVERFLOW, self._context.operand >> 6 & 1)
-        self._set_flag(Flag.NEGATIVE, self._context.operand >> 7)
+        operand = self._get_operand()
+        self._set_flag(Flag.ZERO, int(self._a & operand == 0))
+        self._set_flag(Flag.OVERFLOW, operand >> 6 & 1)
+        self._set_flag(Flag.NEGATIVE, operand >> 7)
 
     def _rol(self) -> None:
-        rotated = (self._context.operand << 1
-                   | self._flags & Flag.CARRY) & 0xFF
-        self._set_flag(Flag.CARRY, self._context.operand >> 7)
+        operand = self._get_operand()
+        rotated = (operand << 1 | self._flags & Flag.CARRY) & 0xFF
+        self._set_flag(Flag.CARRY, operand >> 7)
         self._set_nz_flags(rotated)
         self._store(self._context.address, rotated)
 
     def _ror(self) -> None:
-        rotated = (self._context.operand >> 1 |
-                   (self._flags & Flag.CARRY) << 7) & 0xFF
-        self._set_flag(Flag.CARRY, self._context.operand & 1)
+        operand = self._get_operand()
+        rotated = (operand >> 1 | (self._flags & Flag.CARRY) << 7) & 0xFF
+        self._set_flag(Flag.CARRY, operand & 1)
         self._set_nz_flags(rotated)
         self._store(self._context.address, rotated)
 
@@ -459,10 +462,10 @@ class CPU:
         self._a = result & 0xFF
 
     def _adc(self) -> None:
-        self.__adc(self._context.operand)
+        self.__adc(self._get_operand())
 
     def _sbc(self) -> None:
-        self.__adc(self._context.operand ^ 0xFF)
+        self.__adc(self._get_operand() ^ 0xFF)
 
     def _sta(self) -> None:
         self._store(self._context.address, self._a)
@@ -490,12 +493,12 @@ class CPU:
         self._set_nz_flags(self._y)
 
     def _inc(self) -> None:
-        result = (self._context.operand + 1) & 0xFF
+        result = (self._get_operand() + 1) & 0xFF
         self._set_nz_flags(result)
         self._store(self._context.address, result)
 
     def _dec(self) -> None:
-        result = (self._context.operand - 1) & 0xFF
+        result = (self._get_operand() - 1) & 0xFF
         self._set_nz_flags(result)
         self._store(self._context.address, result)
 
@@ -523,20 +526,21 @@ class CPU:
         self._set_nz_flags(self._x)
 
     def _ldx(self) -> None:
-        self._x = self._context.operand
+        self._x = self._get_operand()
         self._set_nz_flags(self._x)
 
     def _ldy(self) -> None:
-        self._y = self._context.operand
+        self._y = self._get_operand()
         self._set_nz_flags(self._y)
 
     def _lda(self) -> None:
-        self._a = self._context.operand
+        self._a = self._get_operand()
         self._set_nz_flags(self._a)
 
     def __cmp(self, register: int) -> None:
-        result = register - self._context.operand
-        self._set_flag(Flag.CARRY, int(register >= self._context.operand))
+        operand = self._get_operand()
+        result = register - operand
+        self._set_flag(Flag.CARRY, int(register >= operand))
         self._set_nz_flags(result)
 
     def _cpx(self) -> None:
@@ -552,7 +556,7 @@ class CPU:
         if not condition:
             return None
         self._curr_cycles += 1
-        offset = self._context.operand
+        offset = self._get_operand()
         address = self._pc + self._calc_signed_address_offset(offset)
         self._page_crossed = self._is_page_crossed(self._pc, address)
         self._pc = address
