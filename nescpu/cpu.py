@@ -2,7 +2,7 @@ import dataclasses
 import enum
 import typing
 
-from mayones.bus import CPUMemoryBus
+from nescpu.bus import CPUMemoryBus
 
 ADC = 'ADC'
 AND = 'AND'

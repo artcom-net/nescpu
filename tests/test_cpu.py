@@ -2,9 +2,9 @@ import pathlib
 
 import pytest
 
-from mayones.bus import CPUMemoryBus
-from mayones.cartridge import Cartridge
-from mayones.cpu import CPU, IllegalOpcodeError, TraceEntry
+from nescpu.bus import CPUMemoryBus
+from nescpu.cartridge import Cartridge
+from nescpu.cpu import CPU, IllegalOpcodeError, TraceEntry
 
 _BASE_DIR = pathlib.Path(__file__).parent
 _ROM_DIR = _BASE_DIR / 'rom'

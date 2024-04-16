@@ -1,6 +1,6 @@
 [project]
-name = "mayones"
-description = "NES console emulator"
+name = "nescpu"
+description = "NES CPU emulator"
 version = "0.1.0"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -22,9 +22,9 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/artcom-net/mayones"
-"Bug Reports" = "https://github.com/artcom-net/mayones/issues"
-"Source" = "https://github.com/artcom-net/mayones"
+"Homepage" = "https://github.com/artcom-net/nescpu"
+"Bug Reports" = "https://github.com/artcom-net/nescpu/issues"
+"Source" = "https://github.com/artcom-net/nescpu"
 
 # [project.scripts]
 
@@ -37,7 +37,7 @@ max-line-length = 79
 
 [tool.isort]
 line_length = 79
-known_first_party = ["mayones"]
+known_first_party = ["nescpu"]
 known_third_party = ["pytest"]
 include_trailing_comma = true
 indent = 4

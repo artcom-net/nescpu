@@ -1,6 +1,6 @@
 import enum
 
-from mayones.mapper import Mapper0
+from nescpu.mapper import Mapper0
 
 
 class Version(enum.Enum):

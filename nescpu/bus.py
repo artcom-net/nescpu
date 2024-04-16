@@ -1,4 +1,4 @@
-from mayones.cartridge import Cartridge
+from nescpu.cartridge import Cartridge
 
 _2KB = 2048
 
