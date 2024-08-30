@@ -1,48 +1,20 @@
-[project]
+[tool.poetry]
 name = "nescpu"
-description = "NES CPU emulator"
 version = "0.1.0"
+description = "NES CPU emulator"
+authors = ["artcom <kust.artcom@gmail.com>"]
+license = "{file = \"LICENSE\"}"
 readme = "README.md"
-license = {file = "LICENSE"}
-authors = [
-    { name = "artcom", email = "kust.artcom@gmail.com" }
-]
-maintainers = []
-keywords = []
-classifiers = []
-requires-python = ">=3.11"
-dependencies = []
 
-[project.optional-dependencies]
-dev = [
-    "flake8==7.0.0",
-    "Flake8-pyproject==1.2.3",
-    "isort==5.13.2",
-    "pytest==8.1.1"
-]
+[tool.poetry.dependencies]
+python = "^3.12"
 
-[project.urls]
-"Homepage" = "https://github.com/artcom-net/nescpu"
-"Bug Reports" = "https://github.com/artcom-net/nescpu/issues"
-"Source" = "https://github.com/artcom-net/nescpu"
-
-# [project.scripts]
+[tool.poetry.group.dev.dependencies]
+flake8 = "7.0.0"
+flake8-pyproject = "1.2.3"
+isort = "5.13.2"
+pytest = "8.1.1"
 
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = ["setuptools>=61.0", "wheel>=0.37.1"]
-
-[tool.flake8]
-max-line-length = 79
-
-[tool.isort]
-line_length = 79
-known_first_party = ["nescpu"]
-known_third_party = ["pytest"]
-include_trailing_comma = true
-indent = 4
-multi_line_output = 3
-skip_glob = []
-skip_gitignore = true
-
-[tool.pytest.ini_options]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

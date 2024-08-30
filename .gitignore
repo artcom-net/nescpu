@@ -19,3 +19,4 @@ config.ini
 log.ini
 main.py
 nescpu/ppu.py
+poetry.lock
